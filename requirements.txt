@@ -1,0 +1,12 @@
+runpod
+torch
+transformers
+accelerate
+safetensors
+pillow
+huggingface_hub
+peft
+git+https://github.com/huggingface/diffusers.git
+optimum-quanto
+torchvision
+huggingface_hub
