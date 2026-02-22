@@ -6,30 +6,23 @@ from io import BytesIO
 from PIL import Image
 from optimum.quanto import QuantizedDiffusersModel
 from diffusers import Flux2KleinPipeline
-from huggingface_hub import login, snapshot_download
-import runpod
+from huggingface_hub import login
 from dotenv import load_dotenv
+import runpod
 
 load_dotenv()
-
-# ── Login & Download models if needed ──────────────────────────────────────
-token = os.getenv("HF_TOKEN")
-if token:
-    login(token=token)
+login(token=os.getenv("HF_TOKEN"))  # ← needed to access gated model
 
 device = "cuda"
-dtype = torch.bfloat16
+dtype  = torch.bfloat16
+HF_REPO = "Asjad1020/flux2klein-transformer-qint8"
 
-# ── Download/cache models ──────────────────────────────────────────────────
-print("Resolving model paths (downloading if needed)...")
-BASE_MODEL = snapshot_download("black-forest-labs/FLUX.2-klein-base-9B")
-QUANT_MODEL = snapshot_download("Asjad1020/flux2klein-transformer-qint8")
-print(f"Base model: {BASE_MODEL}")
-print(f"Quant model: {QUANT_MODEL}")
-
-# ── Load pipeline once at startup ──────────────────────────────────────────
+# ── Load once at startup ───────────────────────────────────────────────────
 print("Loading pipeline...")
-temp_pipe = Flux2KleinPipeline.from_pretrained(BASE_MODEL, torch_dtype=dtype)
+temp_pipe = Flux2KleinPipeline.from_pretrained(
+    "black-forest-labs/FLUX.2-klein-base-9B",
+    torch_dtype=dtype,
+)
 
 TransformerClass = type(temp_pipe.transformer)
 del temp_pipe.transformer
@@ -40,7 +33,7 @@ class QuantizedFlux2KleinTransformer(QuantizedDiffusersModel):
     base_class = TransformerClass
 
 print("Loading quantized transformer...")
-temp_pipe.transformer = QuantizedFlux2KleinTransformer.from_pretrained(QUANT_MODEL).to(device)
+temp_pipe.transformer = QuantizedFlux2KleinTransformer.from_pretrained(HF_REPO).to(device)
 pipe = temp_pipe.to(device)
 print("Pipeline ready!")
 
@@ -55,12 +48,12 @@ RATIOS = {
 # ── Handler ────────────────────────────────────────────────────────────────
 def handler(job):
     try:
-        input_data = job["input"]
-        prompt = input_data["prompt"]
+        input_data    = job["input"]
+        prompt        = input_data["prompt"]
         image_location = input_data["image_path"]
-        aspect_ratio = input_data.get("aspect_ratio", "1:1")
-        num_steps = input_data.get("num_inference_steps", 50)
-        guidance = input_data.get("guidance_scale", 4.0)
+        aspect_ratio  = input_data.get("aspect_ratio", "1:1")
+        num_steps     = input_data.get("num_inference_steps", 50)
+        guidance      = input_data.get("guidance_scale", 4.0)
 
         if not os.path.exists(image_location):
             return {"error": f"Image not found: {image_location}"}
