@@ -7,23 +7,27 @@ from PIL import Image
 from optimum.quanto import QuantizedDiffusersModel
 from diffusers import Flux2KleinPipeline
 from huggingface_hub import login, snapshot_download
-from dotenv import load_dotenv
 import runpod
+from dotenv import load_dotenv
 
 load_dotenv()
-login(token=os.getenv("HF_TOKEN"))
+
+# ── Login & Download models if needed ──────────────────────────────────────
+token = os.getenv("HF_TOKEN")
+if token:
+    login(token=token)
 
 device = "cuda"
-dtype  = torch.bfloat16
+dtype = torch.bfloat16
 
-# ── Use cached paths ───────────────────────────────────────────────────────
-print("Resolving cached model paths...")
-BASE_MODEL  = snapshot_download("black-forest-labs/FLUX.2-klein-base-9B")
+# ── Download/cache models ──────────────────────────────────────────────────
+print("Resolving model paths (downloading if needed)...")
+BASE_MODEL = snapshot_download("black-forest-labs/FLUX.2-klein-base-9B")
 QUANT_MODEL = snapshot_download("Asjad1020/flux2klein-transformer-qint8")
 print(f"Base model: {BASE_MODEL}")
 print(f"Quant model: {QUANT_MODEL}")
 
-# ── Load once at startup ───────────────────────────────────────────────────
+# ── Load pipeline once at startup ──────────────────────────────────────────
 print("Loading pipeline...")
 temp_pipe = Flux2KleinPipeline.from_pretrained(BASE_MODEL, torch_dtype=dtype)
 
@@ -51,12 +55,12 @@ RATIOS = {
 # ── Handler ────────────────────────────────────────────────────────────────
 def handler(job):
     try:
-        input_data     = job["input"]
-        prompt         = input_data["prompt"]
+        input_data = job["input"]
+        prompt = input_data["prompt"]
         image_location = input_data["image_path"]
-        aspect_ratio   = input_data.get("aspect_ratio", "1:1")
-        num_steps      = input_data.get("num_inference_steps", 50)
-        guidance       = input_data.get("guidance_scale", 4.0)
+        aspect_ratio = input_data.get("aspect_ratio", "1:1")
+        num_steps = input_data.get("num_inference_steps", 50)
+        guidance = input_data.get("guidance_scale", 4.0)
 
         if not os.path.exists(image_location):
             return {"error": f"Image not found: {image_location}"}

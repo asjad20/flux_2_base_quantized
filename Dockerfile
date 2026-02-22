@@ -5,12 +5,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-ARG HF_TOKEN
-ENV HF_TOKEN=${HF_TOKEN}
-
 COPY download_model.py .
-RUN python download_model.py
-
 COPY handler.py .
 COPY Airborne_1_beaded/ ./Airborne_1_beaded/
 COPY Airborne_2/ ./Airborne_2/
