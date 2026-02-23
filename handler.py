@@ -6,22 +6,22 @@ from io import BytesIO
 from PIL import Image
 from optimum.quanto import QuantizedDiffusersModel
 from diffusers import Flux2KleinPipeline
-from huggingface_hub import login
-from dotenv import load_dotenv
 import runpod
-
-load_dotenv()
-login(token=os.getenv("HF_TOKEN"))  # ← needed to access gated model
 
 device = "cuda"
 dtype  = torch.bfloat16
-HF_REPO = "Asjad1020/flux2klein-transformer-qint8"
+
+# 1. Network Volume Paths (Serverless uses /runpod-volume)
+NETWORK_STORAGE_PATH = "/runpod-volume/models"
+BASE_MODEL_PATH = f"{NETWORK_STORAGE_PATH}/FLUX.2-klein-base-9B"
+TRANSFORMER_PATH = f"{NETWORK_STORAGE_PATH}/flux2klein-transformer-qint8"
 
 # ── Load once at startup ───────────────────────────────────────────────────
-print("Loading pipeline...")
+print("Loading pipeline from network storage...")
 temp_pipe = Flux2KleinPipeline.from_pretrained(
-    "black-forest-labs/FLUX.2-klein-base-9B",
+    BASE_MODEL_PATH,
     torch_dtype=dtype,
+    local_files_only=True # Forces it to use the local files
 )
 
 TransformerClass = type(temp_pipe.transformer)
@@ -32,8 +32,12 @@ torch.cuda.empty_cache()
 class QuantizedFlux2KleinTransformer(QuantizedDiffusersModel):
     base_class = TransformerClass
 
-print("Loading quantized transformer...")
-temp_pipe.transformer = QuantizedFlux2KleinTransformer.from_pretrained(HF_REPO).to(device)
+print("Loading quantized transformer from network storage...")
+temp_pipe.transformer = QuantizedFlux2KleinTransformer.from_pretrained(
+    TRANSFORMER_PATH,
+    local_files_only=True # Forces it to use the local files
+).to(device)
+
 pipe = temp_pipe.to(device)
 print("Pipeline ready!")
 
@@ -55,6 +59,7 @@ def handler(job):
         num_steps     = input_data.get("num_inference_steps", 50)
         guidance      = input_data.get("guidance_scale", 4.0)
 
+        # Ensure the image actually exists on the RunPod worker
         if not os.path.exists(image_location):
             return {"error": f"Image not found: {image_location}"}
 
@@ -62,7 +67,9 @@ def handler(job):
             return {"error": f"Invalid aspect_ratio '{aspect_ratio}'. Valid: {list(RATIOS.keys())}"}
 
         width, height = RATIOS[aspect_ratio]
-        image1 = Image.open(image_location)
+        
+        # Open and ensure it's in RGB format for the pipeline
+        image1 = Image.open(image_location).convert("RGB")
 
         result = pipe(
             prompt=prompt,
@@ -73,13 +80,15 @@ def handler(job):
             num_inference_steps=num_steps,
         ).images[0]
 
+        # Convert the generated image to base64 to send back to your client
         buffer = BytesIO()
         result.save(buffer, format="PNG")
         img_b64 = base64.b64encode(buffer.getvalue()).decode()
 
-        return {"image": img_b64}
+        return {"output": {"image": img_b64}}
 
     except Exception as e:
         return {"error": str(e)}
 
+# Start the serverless worker
 runpod.serverless.start({"handler": handler})
