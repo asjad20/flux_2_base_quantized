@@ -49,6 +49,14 @@ RATIOS = {
     "3:4":  (896, 1152),
 }
 
+MAX_SIZE    = (1024, 1024)
+
+def load_and_resize(image_path):
+    img = Image.open(image_path)
+    img.thumbnail(MAX_SIZE, Image.LANCZOS)
+    return img
+
+
 # ── Handler ────────────────────────────────────────────────────────────────
 def handler(job):
     try:
@@ -69,7 +77,7 @@ def handler(job):
         width, height = RATIOS[aspect_ratio]
         
         # Open and ensure it's in RGB format for the pipeline
-        image1 = Image.open(image_location).convert("RGB")
+        image1 = load_and_resize(image_location)
 
         result = pipe(
             prompt=prompt,
