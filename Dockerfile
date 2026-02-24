@@ -12,5 +12,6 @@ COPY Airborne_2/ ./Airborne_2/
 COPY Airborne_1_PVC/ ./Airborne_1_PVC/
 COPY Hercule/ ./Hercule/
 COPY Plasma/ ./Plasma/
+COPY jump_mat/ ./jump_mat/
 
 CMD ["python", "-u", "handler.py"]

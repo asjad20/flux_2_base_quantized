@@ -16,4 +16,5 @@ Batch 144-20260220T103613Z-1-001.zip
 Batch 145-20260220T103522Z-1-001.zip
 Batch 146-20260220T103539Z-1-001.zip
 caption_generator.py
+download_model.py
 __pycache__
