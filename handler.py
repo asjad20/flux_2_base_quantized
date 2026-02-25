@@ -57,38 +57,48 @@ def load_and_resize(image_path):
     return img
 
 
-# ── Handler ────────────────────────────────────────────────────────────────
+def base64_to_pil(b64_string):
+    image_data = base64.b64decode(b64_string)
+    return Image.open(BytesIO(image_data)).convert("RGB")
+
 def handler(job):
     try:
         input_data    = job["input"]
+        generation_type = input_data["generation_type"]
         prompt        = input_data["prompt"]
-        image_location = input_data["image_path"]
         aspect_ratio  = input_data.get("aspect_ratio", "1:1")
         num_steps     = input_data.get("num_inference_steps", 50)
         guidance      = input_data.get("guidance_scale", 4.0)
-
-        # Ensure the image actually exists on the RunPod worker
-        if not os.path.exists(image_location):
-            return {"error": f"Image not found: {image_location}"}
-
-        if aspect_ratio not in RATIOS:
-            return {"error": f"Invalid aspect_ratio '{aspect_ratio}'. Valid: {list(RATIOS.keys())}"}
-
         width, height = RATIOS[aspect_ratio]
+
+        if generation_type == "image":
+
+            image_location = input_data["image_path"]
+
+            if not os.path.exists(image_location):
+                return {"error": f"Image not found: {image_location}"}
+
+            if aspect_ratio not in RATIOS:
+                return {"error": f"Invalid aspect_ratio '{aspect_ratio}'. Valid: {list(RATIOS.keys())}"}
+            
+            image1 = load_and_resize(image_location)
         
-        # Open and ensure it's in RGB format for the pipeline
-        image1 = load_and_resize(image_location)
+        else :
+            try:
+                image_b64 = input_data["image"]
+                image1 = base64_to_pil(image_b64)           
+            except Exception as e:
+                return {"error" : f"Error in parsing the image : {e}"}
 
         result = pipe(
             prompt=prompt,
-            image=[image1],
+            image=image1,
             height=height,
             width=width,
             guidance_scale=guidance,
             num_inference_steps=num_steps,
         ).images[0]
 
-        # Convert the generated image to base64 to send back to your client
         buffer = BytesIO()
         result.save(buffer, format="PNG")
         img_b64 = base64.b64encode(buffer.getvalue()).decode()
@@ -98,5 +108,4 @@ def handler(job):
     except Exception as e:
         return {"error": str(e)}
 
-# Start the serverless worker
 runpod.serverless.start({"handler": handler})
